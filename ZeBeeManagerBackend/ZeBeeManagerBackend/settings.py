@@ -95,14 +95,12 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SITE_ID = 1
 
-CORS_TRUSTED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = [
     "https://zebee-manager-ze-bee-air.vercel.app",
     "https://zebee-manager.com",
     "https://www.zebee-manager.com",
     "https://zebee-manager.onrender.com",
 ]
-
-CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_ALL_ORIGINS = False
 
