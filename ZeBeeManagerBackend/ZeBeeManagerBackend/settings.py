@@ -99,6 +99,7 @@ CORS_ALLOWED_ORIGINS = [
     "zebee-manager-ze-bee-air.vercel.app",
     "zebee-manager.com",
     "www.zebee-manager.com",
+    "zebee-manager.onrender.com",
 ]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_HEADERS = [
