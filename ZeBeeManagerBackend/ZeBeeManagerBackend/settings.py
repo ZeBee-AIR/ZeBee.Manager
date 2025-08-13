@@ -96,7 +96,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SITE_ID = 1
 
 CORS_ALLOWED_ORIGINS = [
-    "localhost:5173",
     "zebee-manager-ze-bee-air.vercel.app",
     "zebee-manager.com",
     "www.zebee-manager.com",
