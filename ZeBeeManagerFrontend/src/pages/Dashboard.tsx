@@ -6,8 +6,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { format, getYear, isWithinInterval, startOfMonth, endOfMonth, eachMonthOfInterval, parseISO, subMonths } from 'date-fns';
+import { format, getYear, isWithinInterval, startOfMonth, endOfMonth, eachMonthOfInterval, parseISO, subMonths, startOfYear, endOfYear } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { Tooltip as ShadTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -90,6 +91,19 @@ const Dashboard = () => {
         from: startOfMonth(subMonths(new Date(), 1)),
         to: endOfMonth(new Date()),
     });
+
+    const [selectedYearInitial, setSelectedYearInitial] = useState(new Date().getFullYear());
+    const [selectedYearEnd, setSelectedYearEnd] = useState(new Date().getFullYear());
+    const availableYearsInitial = Array.from({ length: new Date().getFullYear() - 2009 }, (_, i) => new Date().getFullYear() - i);
+    const availableYearsEnd = availableYearsInitial.filter(y => y >= selectedYearInitial);
+
+    useEffect(() => {
+        if (selectedYearEnd < selectedYearInitial) {
+            setSelectedYearEnd(selectedYearInitial);
+        }
+    }, [selectedYearInitial, selectedYearEnd]);
+
+
     const [isChurnModalOpen, setIsChurnModalOpen] = useState(false);
 
     useEffect(() => {
@@ -115,25 +129,104 @@ const Dashboard = () => {
             return {
                 totalActiveClients: 0, newClientsInPeriod: 0, cancelledClientsInPeriod: 0,
                 totalChurnRevenueLoss: 0, totalRevenue: 0, totalCommission: 0, totalRevenueComission: 0,
-                companyHistoryData: [], squadRevenueData: [], activeClientsBySquadData: [], squadAcquisitionChurnData: [],
+                squadRevenueData: [], activeClientsBySquadData: [], squadAcquisitionChurnData: [],
                 churnedClientsDetails: []
             };
         }
-    
+
         const interval = { start: dateRange.from, end: dateRange.to || dateRange.from };
-        const monthsInInterval = eachMonthOfInterval(interval);
-        
+
         const activeClientsNow = clients.filter(c => c.status === 'Ativo');
         const newClientsInPeriod = clients.filter(c => isWithinInterval(parseISO(c.created_at), interval)).length;
         const clientsCancelledInPeriod = clients.filter(c => c.status === 'Inativo' && c.status_changed_at && isWithinInterval(parseISO(c.status_changed_at), interval));
         const totalChurnRevenueLoss = clientsCancelledInPeriod.reduce((sum, c) => sum + parseFloat(c.plan_value || '0'), 0);
-        
+
         const squadNameMap = new Map(squads.map(s => [s.id, s.name]));
-        
+
+        const monthsInInterval = eachMonthOfInterval(interval);
         let totalRecurrenceForPeriod = 0;
         let totalCommissionForPeriod = 0;
-        const companyHistoryData: { month: string; revenue: number; commission: number }[] = [];
+        
+        monthsInInterval.forEach(monthDate => {
+            clients.forEach(client => {
+                const createdAt = parseISO(client.created_at);
+                const statusChangedAt = client.status_changed_at ? parseISO(client.status_changed_at) : null;
+                const wasActiveInMonth = createdAt <= endOfMonth(monthDate) && (!statusChangedAt || statusChangedAt > startOfMonth(monthDate));
+                
+                const yearKey = getYear(monthDate).toString();
+                const monthKey = format(monthDate, 'MMMM', { locale: enUS }).toLowerCase();
+                const monthData = client.monthly_data?.[yearKey]?.[monthKey];
+
+                if (wasActiveInMonth && !monthData?.waiveMonthlyFee) {
+                    totalRecurrenceForPeriod += parseFloat(client.plan_value || '0');
+                }
+
+                if (monthData && !monthData.waiveCommission) {
+                    const revenue = parseFloat(monthData.revenue || '0');
+                    if (revenue > 0) {
+                        const commissionPercentage = parseFloat(client.client_commission_percentage || '0') / 100;
+                        const hasSpecial = client.has_special_commission;
+                        const threshold = parseFloat(client.special_commission_threshold || '0');
+                        let revenueComission = 0;
+                        let isCommissionable = false;
+
+                        if (hasSpecial && revenue > threshold) {
+                            revenueComission = revenue - threshold; 
+                            isCommissionable = true;
+                        } else if (!hasSpecial) {
+                            revenueComission = revenue;
+                            isCommissionable = true;
+                        }
+
+                        if (isCommissionable) {
+                            totalCommissionForPeriod += revenueComission * commissionPercentage || 0;
+                        }
+                    }
+                }
+            });
+        });
+
         const squadMetrics = new Map(squads.map(s => [s.id, { revenue: 0, activeClients: 0, newClients: 0, churns: 0 }]));
+        clients.forEach(client => {
+            if (!client.squad) return;
+            const squadPerf = squadMetrics.get(client.squad);
+            if (squadPerf) {
+                if (client.status === 'Ativo') {
+                    squadPerf.activeClients += 1;
+                    squadPerf.revenue += parseFloat(client.plan_value || '0');
+                }
+                if (isWithinInterval(parseISO(client.created_at), interval)) squadPerf.newClients += 1;
+                if (client.status === 'Inativo' && client.status_changed_at && isWithinInterval(parseISO(client.status_changed_at), interval)) squadPerf.churns += 1;
+            }
+        });
+    
+        const squadRevenueData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', revenue: data.revenue }));
+        const activeClientsBySquadData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', value: data.activeClients }));
+        const squadAcquisitionChurnData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', newClients: data.newClients, churns: data.churns }));
+
+        return {
+            totalActiveClients: activeClientsNow.length,
+            newClientsInPeriod,
+            cancelledClientsInPeriod: clientsCancelledInPeriod.length,
+            totalChurnRevenueLoss,
+            totalRevenue: totalRecurrenceForPeriod,
+            totalRevenueComission: totalRecurrenceForPeriod + totalCommissionForPeriod,
+            totalCommission: totalCommissionForPeriod,
+            squadRevenueData,
+            activeClientsBySquadData,
+            squadAcquisitionChurnData,
+            churnedClientsDetails: clientsCancelledInPeriod
+        };
+    }, [clients, squads, dateRange]);
+
+    const historicalChartData = useMemo(() => {
+        if (!clients.length) return [];
+
+        const startDate = startOfYear(new Date(selectedYearInitial, 0, 1));
+        const endDate = endOfYear(new Date(selectedYearEnd, 11, 31));
+        const monthsInInterval = eachMonthOfInterval({ start: startDate, end: endDate });
+
+        const data: { month: string; revenue: number; commission: number }[] = [];
 
         monthsInInterval.forEach(monthDate => {
             let recurrenceForThisMonth = 0;
@@ -159,8 +252,8 @@ const Dashboard = () => {
                         const hasSpecial = client.has_special_commission;
                         const threshold = parseFloat(client.special_commission_threshold || '0');
                         let revenueComission = 0;
-
                         let isCommissionable = false;
+
                         if (hasSpecial) {
                             if (revenue > threshold) {
                                 revenueComission = revenue - threshold; 
@@ -178,48 +271,17 @@ const Dashboard = () => {
                 }
             });
 
-            totalRecurrenceForPeriod += recurrenceForThisMonth;
-            totalCommissionForPeriod += commissionForThisMonth;
-            companyHistoryData.push({
-                month: format(monthDate, 'MMM', { locale: ptBR }),
-                revenue: recurrenceForThisMonth + commissionForThisMonth,
+            data.push({
+                month: format(monthDate, 'MMM/yy', { locale: ptBR }),
+                revenue: recurrenceForThisMonth,
                 commission: commissionForThisMonth
             });
         });
 
-        clients.forEach(client => {
-            if (!client.squad) return;
-            const squadPerf = squadMetrics.get(client.squad);
-            if (squadPerf) {
-                if (client.status === 'Ativo') {
-                    squadPerf.activeClients += 1;
-                    // Soma a recorrência ao squad
-                    squadPerf.revenue += parseFloat(client.plan_value || '0');
-                }
-                if (isWithinInterval(parseISO(client.created_at), interval)) squadPerf.newClients += 1;
-                if (client.status === 'Inativo' && client.status_changed_at && isWithinInterval(parseISO(client.status_changed_at), interval)) squadPerf.churns += 1;
-            }
-        });
-    
-        const squadRevenueData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', revenue: data.revenue }));
-        const activeClientsBySquadData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', value: data.activeClients }));
-        const squadAcquisitionChurnData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', newClients: data.newClients, churns: data.churns }));
+        return data;
 
-        return {
-            totalActiveClients: activeClientsNow.length,
-            newClientsInPeriod,
-            cancelledClientsInPeriod: clientsCancelledInPeriod.length,
-            totalChurnRevenueLoss,
-            totalRevenue: totalRecurrenceForPeriod,
-            totalRevenueComission: totalRecurrenceForPeriod + totalCommissionForPeriod,
-            totalCommission: totalCommissionForPeriod,
-            companyHistoryData,
-            squadRevenueData,
-            activeClientsBySquadData,
-            squadAcquisitionChurnData,
-            churnedClientsDetails: clientsCancelledInPeriod
-        };
-    }, [clients, squads, dateRange]);
+    }, [clients, selectedYearInitial, selectedYearEnd]);
+
 
     if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
     if (error) return <div className="flex justify-center items-center h-screen text-destructive"><AlertCircle className="h-12 w-12 mr-4"/> {error}</div>;
@@ -235,8 +297,15 @@ const Dashboard = () => {
                         <p className="text-muted-foreground">Monitore o desempenho de seus contratos e squads.</p>
                     </div>
                     <Popover>
-                        <PopoverTrigger asChild><Button variant={"outline"} className={cn("w-[280px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{dateRange?.from ? (dateRange.to ? <>{format(dateRange.from, "LLL dd, y", { locale: ptBR })} - {format(dateRange.to, "LLL dd, y", { locale: ptBR })}</> : format(dateRange.from, "LLL dd, y", { locale: ptBR })) : (<span>Selecione um período</span>)}</Button></PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end"><Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={ptBR} /></PopoverContent>
+                        <PopoverTrigger asChild>
+                            <Button variant={"outline"} className={cn("w-[280px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {dateRange?.from ? (dateRange.to ? <>{format(dateRange.from, "LLL dd, y", { locale: ptBR })} - {format(dateRange.to, "LLL dd, y", { locale: ptBR })}</> : format(dateRange.from, "LLL dd, y", { locale: ptBR })) : (<span>Selecione um período</span>)}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} locale={ptBR} />
+                        </PopoverContent>
                     </Popover>
                 </div>
 
@@ -269,9 +338,44 @@ const Dashboard = () => {
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card>
-                        <CardHeader><CardTitle className="text-lg font-semibold flex items-center gap-2"><DollarSign className="text-yellow-500" />Histórico de Recorrência e Comissão</CardTitle></CardHeader>
+                        <CardHeader>
+                            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                                <DollarSign className="text-yellow-500" />
+                                Histórico de Recorrência e Comissão
+                            </CardTitle>
+                            <CardTitle className="text-sm font-medium flex items-center gap-2 justify-items-end">
+                                De:
+                                <Select value={selectedYearInitial.toString()} onValueChange={v => setSelectedYearInitial(parseInt(v))}>
+                                    <SelectTrigger className="w-[180px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableYearsInitial.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+
+                                Até:
+                                <Select value={selectedYearEnd.toString()} onValueChange={v => setSelectedYearEnd(parseInt(v))}>
+                                    <SelectTrigger className="w-[180px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableYearsEnd.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </CardTitle>
+                        </CardHeader>
                         <CardContent>
-                            <ResponsiveContainer width="100%" height={300}><LineChart data={businessLogic.companyHistoryData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis /><Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /><Legend /><Line type="monotone" dataKey="revenue" stroke="#3B82F6" name="Recorrência" /><Line type="monotone" dataKey="commission" stroke="#10B981" name="Comissão" /></LineChart></ResponsiveContainer>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <LineChart data={historicalChartData}>
+                                <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" />
+                                <YAxis />
+                                <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                                <Legend />
+                                <Line type="monotone" dataKey="revenue" stroke="#3B82F6" name="Recorrência" />
+                                <Line type="monotone" dataKey="commission" stroke="#10B981" name="Comissão" />
+                                </LineChart>
+                            </ResponsiveContainer>
                         </CardContent>
                     </Card>
                     <Card>
