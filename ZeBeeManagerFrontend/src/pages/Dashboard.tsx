@@ -203,7 +203,6 @@ const Dashboard = () => {
         const squadRevenueData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', revenue: data.revenue }));
         const activeClientsBySquadData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', value: data.activeClients }));
         const squadAcquisitionChurnData = Array.from(squadMetrics.entries()).map(([id, data]) => ({ name: squadNameMap.get(id) || 'N/A', newClients: data.newClients, churns: data.churns }));
-        console.log(squadAcquisitionChurnData);
         return {
             totalActiveClients: activeClientsNow.length,
             newClientsInPeriod,
