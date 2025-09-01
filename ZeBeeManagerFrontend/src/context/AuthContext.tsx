@@ -10,7 +10,7 @@ interface User {
     id: number;
     username: string;
     is_superuser: boolean;
-    profile: UserProfile;
+    squad_name: string;
 }
 
 interface AuthContextType {
@@ -36,6 +36,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             try {
                 const response = await api.get('/auth/user/');
+                console.log(response.data);
                 setUser(response.data);
             } catch (error) {
                 console.error("Token inválido ou expirado. Deslogando.", error);
