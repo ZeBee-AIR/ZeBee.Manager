@@ -10,7 +10,9 @@ SECRET_KEY = 'django-insecure-%95(3+#6ksc-6#py5j)asdtg-3t3l()5di5jkfxnav4b&q@l&0
 DEBUG = True
 
 ALLOWED_HOSTS = [
-    'zebee-manager.onrender.com',
+    'zebee-manager-ambienteteste.onrender.com',
+    "zebee-manager-ambiente-teste.vercel.app",
+    '127.0.0.1',
 ]
 
 INSTALLED_APPS = [
@@ -96,14 +98,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SITE_ID = 1
 
 CORS_ALLOWED_ORIGINS = [
-    "https://zebee-manager-ze-bee-air.vercel.app",
-    "https://zebee-manager.com",
-    "https://www.zebee-manager.com",
-    "https://zebee-manager.onrender.com",
+    "http://localhost:5173",
+    "https://zebee-manager-ambiente-teste.vercel.app",
+    'https://zebee-manager-ambienteteste.onrender.com',
 ]
-
 CORS_ALLOW_ALL_ORIGINS = False
-
 CORS_ALLOW_HEADERS = [
     'accept', 'authorization', 'content-type', 'origin',
     'user-agent', 'x-csrftoken', 'x-requested-with',
