@@ -152,12 +152,11 @@ const Dashboard = () => {
                 : new Date();
             return total + differenceInMonths(endDate, startDate);
         }, 0);
+
         const averageClientLifespan = clients.length > 0 ? totalLifespanInMonths / clients.length : 0;
-        const totalActiveRecurrenceValue = activeClientsNow.reduce((sum, c) => sum + parseFloat(c.plan_value || '0'), 0);
-        const averageRecurrenceValue = activeClientsNow.length > 0 ? totalActiveRecurrenceValue / activeClientsNow.length : 0;
-        const monthsInRange = differenceInMonths(interval.end, interval.start) + 1;
-        const averageNewClientsFrequency = monthsInRange > 0 ? newClientsInPeriod / monthsInRange : 0;
-        const lifetimeValue = averageRecurrenceValue * averageNewClientsFrequency * averageClientLifespan;
+        const totalRecurrenceValue = clients.reduce((sum, c) => sum + parseFloat(c.plan_value || '0'), 0);
+        const averageRecurrenceValue = clients.length > 0 ? totalRecurrenceValue / clients.length : 0;
+        const lifetimeValue = averageRecurrenceValue * averageClientLifespan;
 
         const entries = newClientsInPeriodArray.reduce((sum, c) => sum + parseFloat(c.plan_value || '0'), 0);
 
