@@ -28,6 +28,9 @@ export default {
 					DEFAULT: 'var(--primary)',
 					foreground: 'var(--primary-foreground)'
 				},
+				primary15: 'var(--primary15)',
+				primary10: 'var(--primary10)',
+				primary8: 'var(--primary8)',
 				secondary: {
 					DEFAULT: 'var(--secondary)',
 					foreground: 'var(--secondary-foreground)'
